@@ -13,27 +13,29 @@ Developed as part of a research project on **sustainable interaction design**, t
 ### 1. Download and Install
 
 1. [Download the ZIP file](#) from this GitHub repository and **unzip** it to your desktop or another easy-to-find location.
-   <img width="414" height="373" alt="Screenshot 2025-08-07 at 13 23 25" src="https://github.com/user-attachments/assets/632fb963-f5a3-4557-ada6-c0fc0f3c98eb" />
+   
+   <img width="414" height="373" alt="Screenshot 2025-08-07 at 13 23 25" src="https://github.com/user-attachments/assets/14a05034-ae47-4932-b970-14b56f6d2812" />
 
 3. Open **Google Chrome** and go to:  
    `chrome://extensions/`
     
 5. In the top-right corner, **toggle on** `Developer mode`.
    
-   <img width="164" height="44" alt="image" src="https://github.com/user-attachments/assets/2042307b-327d-43c2-a2c9-b405f4bdf78f" />
+   <img width="164" height="44" alt="image" src="https://github.com/user-attachments/assets/87922a6f-260d-4754-a74e-fae458344651" />
+
 
 7. Click **Load unpacked** and select the unzipped folder.
    
-   <img width="172" height="48" alt="image" src="https://github.com/user-attachments/assets/b9ded244-9f23-4e65-bcad-d9790e5fed97" />
+   <img width="172" height="48" alt="image" src="https://github.com/user-attachments/assets/009fd06c-7b2c-449a-acba-6c7acc8b3010" />
 
 9. In your Chrome toolbar:
    Click the 🧩 **Extensions icon**
    
-   <img width="612" height="24" alt="image" src="https://github.com/user-attachments/assets/ae31eeb7-2aae-4145-819d-93d3b843e739" />
-   
+   <img width="612" height="24" alt="image" src="https://github.com/user-attachments/assets/99de7fb3-2db9-4f1c-abf3-8c84343e2dd4" />
+
    Click the 📌 **pin** next to “Invisible Emissions” Leaf icon to make it visible and switch the **Enable Feedback** toggle to **ON.**
    
-   <img width="304" height="308" alt="Screenshot 2025-08-07 at 10 57 26" src="https://github.com/user-attachments/assets/cc1102fe-7a95-4405-a2e6-d38467eba675" />
+   <img width="304" height="308" alt="Screenshot 2025-08-07 at 10 57 26" src="https://github.com/user-attachments/assets/cb52f4d3-b281-445c-836f-82dc0d8db37f" />
 
 ### 2. Access ChatGPT
 
