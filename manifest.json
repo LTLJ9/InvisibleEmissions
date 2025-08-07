@@ -1,0 +1,23 @@
+{
+    "manifest_version": 3,
+    "name": "ChatGPT Eco-Feedback Overlay",
+    "version": "1.0",
+    "description": "Displays real-time carbon feedback for ChatGPT queries.",
+    "permissions": ["activeTab", "scripting", "storage"],
+    "host_permissions": ["https://chat.openai.com/*"],
+    "content_scripts": [{
+        "matches": [
+            "https://chat.openai.com/*",
+            "https://chatgpt.com/*"
+        ],
+        "js": ["content.js"],
+        "css": ["style.css"]
+    }],
+    "action": {
+        "default_popup": "popup.html",
+        "default_icon": "leaf.png"
+    },
+    "icons": {
+        "128": "leaf.png"
+    }
+}

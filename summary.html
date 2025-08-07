@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Session Summary</title>
+</head>
+<body>
+    <h3>Eco Summary</h3>
+    <p id="total"></p>
+    <script>
+        chrome.storage.local.get("sessionCO2Total", (data) => {
+            const total = data.sessionCO2Total || 0;
+            document.getElementById(
+                "total"
+            ).textContent = `🌿 Total emissions this session: ${total.toFixed(
+          2
+        )}g CO₂`;
+        });
+    </script>
+</body>
+</html>

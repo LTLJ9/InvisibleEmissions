@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Eco-Feedback</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="container">
+    <h3>🌿 Eco-Feedback</h3>
+    <div class="toggle-row">
+      <label for="toggle">Enable Feedback</label>
+      <label class="switch">
+        <input type="checkbox" id="toggle" />
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div id="co2Simulator" style="margin-top: 16px;">
+      <label for="simulatedCO2">Simulated CO₂ Total (g):</label>
+      <input type="range" id="simulatedCO2" min="0" max="50" step="0.1" value="0" />
+      <span id="simValue">0.00g</span>
+    </div>
+    <button id="resetButton" class="reset-btn">Reset CO₂ Counter</button>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
