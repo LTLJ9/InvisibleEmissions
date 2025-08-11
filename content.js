@@ -1,19 +1,19 @@
+let currentVariant = "A1B1"; // default
 let totalCO2 = 0;
 let floatingWidget;
 let activePopover = null;
 let popoverAnchor = null;
 
-chrome.storage.local.get(["ecoFeedbackEnabled"], (data) => {
+chrome.storage.local.get(["ecoFeedbackEnabled", "designVariant"], (data) => {
     if (!data.ecoFeedbackEnabled) {
         console.log("Eco-feedback disabled");
         return;
     }
-    console.log("Eco-feedback script running");
-
+    currentVariant = data.designVariant || "A1B1";
+    console.log(`Eco-feedback script running. Variant: ${currentVariant}`);
     startObserver();
 });
 
-// Heuristic estimate: ~0.003g CO₂ per token (input + output)
 function estimateCarbon(inputText, outputText) {
     const tokensInput = countTokens(inputText);
     const tokensOutput = countTokens(outputText);
@@ -30,98 +30,118 @@ function countTokens(text) {
     return text.trim().split(/\s+/).length * 1.5;
 }
 
-// Color gradient for impact severity — used by both inline + floating feedback
-function getImpactColor(value) {
-    if (value <= 0.02) return "#FFB300"; // Deep golden amber
-    if (value <= 0.1) return "#FFA000"; // Warm orange
-    if (value <= 0.25) return "#FB8C00"; // Strong orange
-    if (value <= 0.5) return "#F57C00"; // Burnt orange
-    if (value <= 1.0) return "#EF6C00"; // Darker orange
-    if (value <= 2.5) return "#E64A19"; // Orangey red
-    if (value <= 5.0) return "#D84315"; // Red-orange
-    if (value <= 10.0) return "#D32F2F"; // True red
-    if (value <= 20.0) return "#C62828"; // Dark red
-    return "#B71C1C"; // Blood red
+function getImpactColor(valueSingle, valueTotal) {
+    if (currentVariant === "A1B1") {
+        if (valueSingle <= 0.2) return "#FFC107"; // Yellow 
+        if (valueSingle <= 0.4) return "#FFB300"; // Darker Yellow
+        if (valueSingle <= 0.6) return "#FB8C00"; // Orange 
+        if (valueSingle <= 0.8) return "#F57C00"; // Darker Orange 
+        return "#BF360C"; // Deep Orange
+
+    } else {
+        if (valueTotal <= 2) return "#FFC107"; // Yellow
+        if (valueTotal <= 5) return "#FFB300"; // Darker Yellow
+        if (valueTotal <= 10) return "#FB8C00"; // Orange 
+        if (valueTotal <= 19.99) return "#F57C00"; // Darker Orange 
+        return "#BF360C"; // Deep Orange
+    }
 }
-
-
 // Floating widget creation
-const DAILY_BUDGET_G = 50;
-
-function createFloatingWidget() {
-    const existing = document.getElementById("eco-orb");
-    if (existing) existing.remove();
-    ensureEcoOrbStyles();
-
-    const orb = document.createElement("div");
-    orb.id = "eco-orb";
-    orb.innerHTML = `
-    <div class="eco-orb__metaphor">
-      <span class="eco-orb__icon">📩</span>
-      <span class="eco-orb__text">Sending an email</span>
-    </div>
-
-    <div class="eco-orb__ring">
-      <div class="eco-orb__value-wrap">
-        <div class="eco-orb__value">0.000</div>
-        <div class="eco-orb__unit">g CO₂</div>
-      </div>
-    </div>
-  `;
-    orb.addEventListener("click", (e) => {
-        const value = totalCO2 || 0;
-        const metaphor = getMetaphor(value);
-        showPopover(orb, metaphor);
-    });
-
-    document.body.appendChild(orb);
-    floatingWidget = orb;
+function createFloatingWidget(gramsCO2, totalCO2) {
+    const impactColor = getImpactColor(gramsCO2, totalCO2);
+    floatingWidget = document.createElement("div");
+    floatingWidget.id = "eco-floating-widget";
+    floatingWidget.style.position = "fixed";
+    floatingWidget.style.bottom = "20px";
+    floatingWidget.style.right = "20px";
+    floatingWidget.style.background = impactColor;
+    floatingWidget.style.color = "#fff";
+    floatingWidget.style.padding = "10px 14px";
+    floatingWidget.style.borderRadius = "10px";
+    floatingWidget.style.fontSize = "14px";
+    floatingWidget.style.fontFamily = "system-ui, sans-serif";
+    floatingWidget.style.boxShadow = "0 4px 10px rgba(0,0,0,0.2)";
+    floatingWidget.style.zIndex = "9999";
+    floatingWidget.innerText = `🌿 Session total: <strong>${totalCO2.toFixed(3)}g CO₂</strong>`;
+    document.body.appendChild(floatingWidget);
 }
-
-// Updates cumulative session CO₂ total with animation and metaphor display
+// Update floating widget for Variant B (cumulative)
 function updateFloatingSummary(gramsCO2) {
+    const metaphor = getMetaphor(totalCO2 + gramsCO2);
     const start = totalCO2;
     const end = totalCO2 + gramsCO2;
 
     if (!floatingWidget || !document.body.contains(floatingWidget)) {
-        createFloatingWidget();
+        createFloatingWidget(0, start); // Start from current total
     }
 
-    const valueEl = floatingWidget.querySelector(".eco-orb__value");
-    const unitEl = floatingWidget.querySelector(".eco-orb__unit");
-    const metaphorText = floatingWidget.querySelector(".eco-orb__text");
-    const iconEl = floatingWidget.querySelector(".eco-orb__icon");
+    floatingWidget.innerHTML = `<span>🌿 Session total: ⏳ Calculating...</span>`;
 
-    const metaphor = getMetaphor(end);
-    metaphorText.textContent = metaphor.text.replace("≈ ", "");
-    iconEl.textContent = metaphor.icon || "🌱";
+    requestAnimationFrame(() => {
+        const duration = 1000;
+        const startTime = performance.now();
 
-    const duration = 900;
-    const startTime = performance.now();
+        function animate(currentTime) {
+            const elapsed = currentTime - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            const current = start + (end - start) * progress;
 
-    const animate = (t) => {
-        const p = Math.min((t - startTime) / duration, 1);
-        const current = start + (end - start) * p;
-        valueEl.textContent = current.toFixed(3);
+            floatingWidget.innerHTML = `🌿 Session total: <strong style="color: inherit;">${current.toFixed(3)}g CO₂</strong>`;
+            floatingWidget.style.background = getImpactColor(current, current);
 
-        const color = getImpactColor(current);
-        const progress = Math.min(current / DAILY_BUDGET_G, 1);
-        floatingWidget.style.setProperty("--ring", color);
-        floatingWidget.style.setProperty("--progress", progress.toString());
-
-        if (p < 1) {
-            requestAnimationFrame(animate);
-        } else {
-            totalCO2 = end;
+            if (progress < 1) {
+                requestAnimationFrame(animate);
+            } else {
+                totalCO2 = end;
+            }
         }
-    };
-    requestAnimationFrame(animate);
+
+        requestAnimationFrame(animate);
+    });
+
+    let metaphorEl = document.getElementById("eco-floating-metaphor");
+    if (!metaphorEl) {
+        metaphorEl = document.createElement("div");
+        metaphorEl.id = "eco-floating-metaphor";
+        Object.assign(metaphorEl.style, {
+            position: "fixed",
+            bottom: "60px",
+            right: "20px",
+            fontSize: "12px",
+            fontStyle: "italic",
+            color: "#666",
+            fontFamily: "system-ui, sans-serif",
+            zIndex: "9999",
+            marginBottom: "6px",
+            marginRight: "2px",
+            marginLeft: "auto",
+        });
+        document.body.appendChild(metaphorEl);
+    }
+
+    metaphorEl.innerHTML = `
+      ${metaphor.text}
+      <span class="eco-info-trigger" style="cursor:pointer; font-style:normal; margin-left:4px;">ℹ️</span>
+  `;
+
+    const info = metaphorEl.querySelector(".eco-info-trigger");
+    if (info) {
+        info.addEventListener("click", () => {
+            showPopover(info, metaphor);
+        });
+    }
 }
 
+// Add inline or floating feedback
 function addFeedbackBubble(gramsCO2, messageNode) {
     const metaphor = getMetaphor(gramsCO2);
     const impactColor = getImpactColor(gramsCO2, totalCO2);
 
+    if (currentVariant === "A2B2") {
+        updateFloatingSummary(gramsCO2);
+        return;
+    }
+    // Variant A (inline)
     const container = document.createElement("div");
     Object.assign(container.style, {
         display: "flex",
@@ -132,15 +152,13 @@ function addFeedbackBubble(gramsCO2, messageNode) {
 
     const bubble = document.createElement("span");
     Object.assign(bubble.style, {
-        background: "transparent",
-        color: impactColor,
-        border: `1px dashed ${impactColor}`,
-        padding: "2px 6px",
-        borderRadius: "6px",
-        fontSize: "12px",
-        fontWeight: "500",
+        background: impactColor,
+        color: "#fff",
+        padding: "4px 10px",
+        borderRadius: "8px",
+        fontSize: "13px",
+        fontWeight: "400",
         fontFamily: "system-ui, sans-serif",
-        opacity: 0.75,
     });
 
     bubble.innerText = "⏳ Calculating CO₂…";
@@ -157,6 +175,7 @@ function addFeedbackBubble(gramsCO2, messageNode) {
 
     messageNode.appendChild(container);
 
+    // Animate in a frame after renders
     requestAnimationFrame(() => {
         let start = 0;
         const duration = 1000;
@@ -187,44 +206,64 @@ function startObserver() {
             'div[data-message-author-role="user"]'
         );
 
-        assistantMessages.forEach((assistantMsg, i) => {
-            if (assistantMsg.dataset.ecoWatching === "true") return;
+        const lastAssistantMessage =
+            assistantMessages[assistantMessages.length - 1];
+        const lastUserMessage = userMessages[userMessages.length - 1];
 
-            const outputNode = assistantMsg.querySelector(".markdown");
-            if (!outputNode) return;
-
-            assistantMsg.dataset.ecoWatching = "true";
-
-            const userMsg = userMessages[i] || userMessages[userMessages.length - 1];
+        if (
+            lastAssistantMessage &&
+            !lastAssistantMessage.dataset.feedbackAdded &&
+            !lastAssistantMessage.dataset.feedbackPending
+        ) {
+            const outputNode = lastAssistantMessage.querySelector(".markdown");
             const inputNode =
-                userMsg?.querySelector(".markdown") ||
-                userMsg?.querySelector(".text-base") ||
-                userMsg?.querySelector("p");
-            const inputText = inputNode?.innerText || userMsg?.innerText || "";
+                lastUserMessage?.querySelector(".markdown") ||
+                lastUserMessage?.querySelector(".text-base") ||
+                lastUserMessage?.querySelector("p");
+            const inputText =
+                inputNode?.innerText || lastUserMessage?.innerText || "";
 
-            if (!floatingWidget || !document.body.contains(floatingWidget)) {
-                createFloatingWidget();
-            }
+            if (outputNode) {
+                lastAssistantMessage.dataset.feedbackPending = "true";
 
-            insertPlaceholderBubble(outputNode);
-
-            waitForStableOutput(outputNode, () => {
-                if (outputNode.dataset.co2Calculated === "true") {
-                    console.warn("CO₂ already calculated for this node, skipping.");
-                    return;
+                if (currentVariant === "A2B2" || currentVariant === "A2B1") {
+                    if (!floatingWidget || !document.body.contains(floatingWidget)) {
+                        createFloatingWidget(0, 0); // Start at zero
+                    }
+                    floatingWidget.innerText = `⏳ Calculating CO₂…`;
+                    floatingWidget.style.background = "#999";
                 }
-                outputNode.dataset.co2Calculated = "true";
+                // For variant A, show placeholder inline
+                if (currentVariant === "A1B1" || currentVariant === "A1B2") {
+                    insertPlaceholderBubble(outputNode);
+                }
+                waitForStableOutput(outputNode, () => {
+                    const outputText = outputNode.innerText;
+                    if (!outputText || outputText.trim().length === 0) {
+                        delete lastAssistantMessage.dataset.feedbackPending;
+                        return;
+                    }
 
-                const outputText = outputNode.innerText || "";
-                if (!outputText.trim()) return;
+                    const carbon = estimateCarbon(inputText, outputText);
+                    console.log("💬 Final CO₂ Estimate:", carbon);
 
-                const carbon = estimateCarbon(inputText, outputText);
-                console.log("💬 Final CO₂ Estimate:", carbon);
+                    if (currentVariant === "A1B1") {
+                        updatePlaceholderWithCO2(outputNode, carbon);
+                    } else if (currentVariant === "A1B2") {
+                        totalCO2 += carbon;
+                        updatePlaceholderWithCO2(outputNode, totalCO2);
+                    } else if (currentVariant === "A2B2") {
+                        updateFloatingSummary(carbon);
+                    } else if (currentVariant === "A2B1") {
+                        updateFloatingInstantaneous(carbon);
+                    }
 
-                updatePlaceholderWithCO2(outputNode, carbon);
-                updateFloatingSummary(carbon);
-            });
-        });
+
+                    lastAssistantMessage.dataset.feedbackAdded = "true";
+                    delete lastAssistantMessage.dataset.feedbackPending;
+                });
+            }
+        }
     });
 
     observer.observe(document.body, {
@@ -232,7 +271,6 @@ function startObserver() {
         subtree: true
     });
 }
-
 
 function animateFloatingWidget(gramsToAdd) {
     const metaphor = getMetaphor(gramsToAdd);
@@ -246,14 +284,14 @@ function animateFloatingWidget(gramsToAdd) {
         const progress = Math.min(elapsed / duration, 1);
         const current = start + (end - start) * progress;
 
-        floatingWidget.innerText = `Session total: 🌿 ${current.toFixed(3)}g`;
+        floatingWidget.innerText = `🌿 Session total: ${current.toFixed(3)}g`;
         floatingWidget.style.background = getImpactColor(current, current);
 
         if (progress < 1) {
             requestAnimationFrame(animate);
         } else {
             totalCO2 = end;
-            floatingWidget.innerText = `Session total: 🌿 ${totalCO2.toFixed(3)}g`;
+            floatingWidget.innerText = `🌿 Session total: ${totalCO2.toFixed(3)}g`;
             floatingWidget.style.background = getImpactColor(gramsToAdd, totalCO2);
         }
     }
@@ -278,7 +316,6 @@ function waitForStableOutput(
     const checkInterval = setInterval(() => {
         const currentLength = node.innerText.length;
 
-        // Dynamic target cycles
         let targetStableCycles = Math.min(
             Math.ceil(currentLength / 400),
             7
@@ -325,6 +362,7 @@ function waitForStableOutput(
     }, baseInterval);
 }
 
+
 function updatePlaceholderWithCO2(messageNode, gramsCO2) {
     const bubble = messageNode.querySelector(".eco-bubble");
     const desc = messageNode.querySelector(".eco-description");
@@ -341,19 +379,30 @@ function updatePlaceholderWithCO2(messageNode, gramsCO2) {
 
     desc.innerHTML = "";
 
+    const info = document.createElement("span");
+    info.className = "eco-info-trigger";
+    info.innerText = " ℹ️";
+    info.style.fontStyle = "normal";
+    info.style.cursor = "pointer";
+    info.style.marginLeft = "4px";
+
+    info.addEventListener("click", () => {
+        showPopover(info, metaphor);
+    });
+
     function animate(currentTime) {
         const elapsed = currentTime - startTime;
         const progress = Math.min(elapsed / duration, 1);
         const current = start + (gramsCO2 - start) * progress;
 
-        let prefix = "This prompt: ";
-        bubble.innerHTML = `${prefix}<strong style="color: inherit;">🌿 ${current.toFixed(3)}g CO₂</strong>`;
-        const impactColor = getImpactColor(current, totalCO2);
-        bubble.style.background = hexToRgba(impactColor, 0.1);
-        bubble.style.color = getImpactColor(current, totalCO2);
+        // bubble.innerText = `${metaphor.icon} ${current.toFixed(3)}g CO₂`;
+        let prefix = currentVariant === "A1B1" ? "🌿 This prompt: " : "🌿 Session total: ";
+        bubble.innerHTML = `${prefix}<strong style="color: inherit;">${current.toFixed(3)}g CO₂</strong>`;
+        bubble.style.background = getImpactColor(current, totalCO2);
 
+        desc.textContent = metaphor.text;
+        desc.appendChild(info);
 
-        desc.textContent = "";
         if (progress < 1) {
             requestAnimationFrame(animate);
         }
@@ -362,15 +411,7 @@ function updatePlaceholderWithCO2(messageNode, gramsCO2) {
     requestAnimationFrame(animate);
 }
 
-function hexToRgba(hex, alpha = 0.15) {
-    const bigint = parseInt(hex.replace("#", ""), 16);
-    const r = (bigint >> 16) & 255;
-    const g = (bigint >> 8) & 255;
-    const b = bigint & 255;
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
-
-function clearEcoFeedbackUI() {
+function clearAllVariantUI() {
     const float = document.getElementById("eco-floating-widget");
     if (float) float.remove();
     floatingWidget = null;
@@ -394,24 +435,28 @@ function clearEcoFeedbackUI() {
     popoverAnchor = null;
 }
 
+chrome.runtime.onMessage.addListener((message) => {
+    if (message.action === "updateVariant" && message.variant) {
+        console.log(`🔁 Switching to variant: ${message.variant}`);
+        currentVariant = message.variant;
+        clearAllVariantUI();
+    }
+
+    if (message.action === "resetCounter") {
+        resetCO2Counter();
+    }
+});
 
 function resetCO2Counter() {
     totalCO2 = 0;
-
     if (floatingWidget && document.body.contains(floatingWidget)) {
-        const valueEl = floatingWidget.querySelector(".eco-orb__value");
-        const metaphorText = floatingWidget.querySelector(".eco-orb__text");
-        const iconEl = floatingWidget.querySelector(".eco-orb__icon");
-        // Reset values
-        valueEl.textContent = "0.000";
-        metaphorText.textContent = "Sending an email"; // or something default
-        iconEl.textContent = "📩";
+        const initialColor = getImpactColor(0, totalCO2);
+        floatingWidget.innerText = `🌿 Session total: <strong>${totalCO2.toFixed(3)}g CO₂</strong>`;
 
-        floatingWidget.style.setProperty("--progress", "0");
-        floatingWidget.style.setProperty("--ring", getImpactColor(0));
+
+        floatingWidget.style.background = initialColor;
     }
-
-    console.log("🧼 CO₂ counter reset.");
+    console.log("🔄 CO₂ Counter Reset!");
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -423,23 +468,120 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     if (message.action === "simulateCO2") {
         const value = message.simulatedTotal;
+        const mode = currentVariant;
         totalCO2 = value;
 
-        clearEcoFeedbackUI();
-        totalCO2 = value;
-        const assistantMessages = document.querySelectorAll(
-            'div[data-message-author-role="assistant"]'
-        );
-        const last = assistantMessages[assistantMessages.length - 1];
-        const outputNode = last?.querySelector(".markdown");
+        if (mode === "A1B1") {
+            clearAllVariantUI();
+            const assistantMessages = document.querySelectorAll(
+                'div[data-message-author-role="assistant"]'
+            );
+            const last = assistantMessages[assistantMessages.length - 1];
+            const outputNode = last?.querySelector(".markdown");
+            if (outputNode) {
+                insertPlaceholderBubble(outputNode);
+                updatePlaceholderWithCO2(outputNode, value);
+            }
+        } else if (mode === "A1B2") {
+            clearAllVariantUI();
+            totalCO2 = value;
+            const assistantMessages = document.querySelectorAll(
+                'div[data-message-author-role="assistant"]'
+            );
+            const last = assistantMessages[assistantMessages.length - 1];
+            const outputNode = last?.querySelector(".markdown");
+            if (outputNode) {
+                insertPlaceholderBubble(outputNode);
+                updatePlaceholderWithCO2(outputNode, totalCO2);
+            }
+        } else if (mode === "A2B2") {
+            clearAllVariantUI();
 
-        if (outputNode) {
-            insertPlaceholderBubble(outputNode);
-            updatePlaceholderWithCO2(outputNode, value);
-            updateFloatingSummary(0); // triggers metaphor + cumulative
+            const previous = totalCO2;
+            totalCO2 = value;
+
+            createFloatingWidget(0, totalCO2);
+            updateFloatingSummary(totalCO2 - previous);
+        } else if (mode === "A2B1") {
+            clearAllVariantUI();
+            updateFloatingInstantaneous(value);
         }
     }
 });
+
+function updateFloatingInstantaneous(gramsCO2) {
+    // Make or update floating widget
+    if (!floatingWidget || !document.body.contains(floatingWidget)) {
+        floatingWidget = document.createElement("div");
+        floatingWidget.id = "eco-floating-widget";
+        floatingWidget.style.position = "fixed";
+        floatingWidget.style.bottom = "20px";
+        floatingWidget.style.right = "20px";
+        floatingWidget.style.background = getImpactColor(gramsCO2, gramsCO2);
+        floatingWidget.style.color = "#fff";
+        floatingWidget.style.padding = "10px 14px";
+        floatingWidget.style.borderRadius = "10px";
+        floatingWidget.style.fontSize = "14px";
+        floatingWidget.style.fontFamily = "system-ui, sans-serif";
+        floatingWidget.style.boxShadow = "0 4px 10px rgba(0,0,0,0.2)";
+        floatingWidget.style.zIndex = "9999";
+        document.body.appendChild(floatingWidget);
+    }
+
+    // Animate the number and keep it bold
+    const start = 0;
+    const duration = 1000;
+    const startTime = performance.now();
+
+    function animate(currentTime) {
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        const current = start + (gramsCO2 - start) * progress;
+
+        floatingWidget.innerHTML = `🌿 This prompt: <strong style="color: inherit;">${current.toFixed(3)}g CO₂</strong>`;
+        floatingWidget.style.background = getImpactColor(current, current);
+
+        if (progress < 1) {
+            requestAnimationFrame(animate);
+        }
+    }
+
+    requestAnimationFrame(animate);
+
+    // Handle metaphor below
+    let metaphorEl = document.getElementById("eco-floating-metaphor");
+    const metaphor = getMetaphor(gramsCO2);
+
+    if (!metaphorEl) {
+        metaphorEl = document.createElement("div");
+        metaphorEl.id = "eco-floating-metaphor";
+        metaphorEl.style.position = "fixed";
+        metaphorEl.style.bottom = "60px";
+        metaphorEl.style.right = "20px";
+        metaphorEl.style.fontSize = "12px";
+        metaphorEl.style.fontStyle = "italic";
+        metaphorEl.style.color = "#666";
+        metaphorEl.style.fontFamily = "system-ui, sans-serif";
+        metaphorEl.style.zIndex = "9999";
+        metaphorEl.style.marginBottom = "6px";
+        metaphorEl.style.marginRight = "2px";
+        metaphorEl.style.marginLeft = "auto";
+        document.body.appendChild(metaphorEl);
+    }
+
+    // Update metaphor content
+    metaphorEl.innerHTML = `
+    ${metaphor.text}
+    <span class="eco-info-trigger" style="cursor:pointer; font-style:normal; margin-left:4px;">ℹ️</span>
+  `;
+
+    const info = metaphorEl.querySelector(".eco-info-trigger");
+    if (info) {
+        info.addEventListener("click", () => {
+            showPopover(info, metaphor);
+        });
+    }
+}
 
 function insertPlaceholderBubble(messageNode) {
     const container = document.createElement("div");
@@ -454,9 +596,8 @@ function insertPlaceholderBubble(messageNode) {
     const bubble = document.createElement("span");
     bubble.className = "eco-bubble";
     Object.assign(bubble.style, {
-        background: "rgba(0, 0, 0, 0.05)",
-        opacity: "0.8",
-        color: "#333",
+        background: "#999",
+        color: "#fff",
         padding: "4px 10px",
         borderRadius: "8px",
         fontSize: "13px",
@@ -482,268 +623,216 @@ function insertPlaceholderBubble(messageNode) {
 function showPopover(triggerElement, metaphor) {
     removeExistingPopover();
 
-    // Hide the orb while popover is open
-    if (floatingWidget) floatingWidget.style.display = "none";
-
     const popover = document.createElement("div");
     popover.className = "eco-popover";
+
     Object.assign(popover.style, {
-        position: "fixed",
-        top: "0",
-        right: "0",
-        width: "360px",
-        height: "100%",
         background: "#fff",
-        borderLeft: "1px solid #ccc",
-        boxShadow: "-2px 0 12px rgba(0,0,0,0.1)",
-        padding: "28px 24px",
+        color: "#333",
+        padding: "16px",
+        borderRadius: "12px",
+        border: "1px solid #ddd",
+        boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
+        fontFamily: "system-ui, sans-serif",
         zIndex: 10000,
-        overflowY: "auto",
-        fontFamily: "system-ui, sans-serif"
+        transition: "opacity 0.3s ease",
     });
 
+    // Variant B — fixed panel
+    if (currentVariant === "A2B2" || currentVariant === "A2B1") {
+        Object.assign(popover.style, {
+            position: "fixed",
+            top: "0",
+            right: "0",
+            width: "340px",
+            height: "100%",
+            maxHeight: "100%",
+            overflowY: "auto",
+            borderLeft: "1px solid #ccc",
+            borderRadius: "0",
+            padding: "28px 24px",
+        });
+
+        popover.innerHTML = `
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <div style="font-size: 22px; font-weight: 600;">
+          ${metaphor.text.replace("≈ ", "")}
+        </div>
+        <div style="font-style: italic; color: #555;">${metaphor.source}</div>
+        <div style="font-size: 15px; line-height: 1.6;">
+          ${metaphor.details || "No details available."}
+        </div>
+        ${
+          metaphor.moreInfo
+            ? `<a href="${metaphor.moreInfo}" target="_blank" rel="noopener" style="color: #2a7ae2; font-size: 14px; margin-top: 8px;">🔗 Learn more</a>`
+            : ""
+        }
+      </div>
+    `;
+
+        document.body.appendChild(popover);
+        return;
+    }
+
+    // Variant A — floating inline with left-pointing arrow
+    popover.style.position = "absolute";
     popover.innerHTML = `
-    <div style="display: flex; flex-direction: column; gap: 12px;">
-      <div style="font-size: 22px; font-weight: 600;">
-        ${metaphor.text.replace("≈ ", "")}
-      </div>
-      <div style="font-style: italic; color: #555;">${metaphor.source}</div>
-      <div style="font-size: 15px; line-height: 1.6;">
-        ${metaphor.details || "No details available."}
-      </div>
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <div><strong>${metaphor.text.replace("≈ ", "")}</strong></div>
+      <div style="font-style: italic; color: #666;">${metaphor.source}</div>
+      <div>${metaphor.details || "No details available."}</div>
       ${
         metaphor.moreInfo
-          ? `<a href="${metaphor.moreInfo}" target="_blank" rel="noopener" style="color: #2a7ae2; font-size: 14px; margin-top: 8px;">🔗 Learn more</a>`
+          ? `<a href="${metaphor.moreInfo}" target="_blank" rel="noopener" style="color: #2a7ae2; font-size: 13px;">Read more</a>`
           : ""
       }
     </div>
   `;
 
-    document.body.appendChild(popover);
-    activePopover = popover;
+    // Create left-pointing arrow
+    const arrow = document.createElement("div");
+    Object.assign(arrow.style, {
+        position: "absolute",
+        width: "0",
+        height: "0",
+        borderTop: "6px solid transparent",
+        borderBottom: "6px solid transparent",
+        borderRight: "6px solid #fff",
+        left: "-6px",
+        top: "16px",
+        zIndex: 10001,
+    });
+    popover.appendChild(arrow);
 
-    // Handle outside click to close
-    setTimeout(() => {
-        function handleClickOutside(e) {
-            if (!popover.contains(e.target)) {
-                removeExistingPopover();
-                document.removeEventListener("click", handleClickOutside);
-            }
-        }
-        document.addEventListener("click", handleClickOutside);
-    }, 0);
+    document.body.appendChild(popover);
+
+    activePopover = popover;
+    popoverAnchor = triggerElement;
+
+    // Position popover to the right of the icon
+    function trackPosition() {
+        if (!activePopover || !popoverAnchor) return;
+
+        const rect = popoverAnchor.getBoundingClientRect();
+        const scrollY = window.scrollY || document.documentElement.scrollTop;
+        const scrollX = window.scrollX || document.documentElement.scrollLeft;
+
+        const spacing = 8; // pixels from icon
+
+        activePopover.style.top = `${rect.top + scrollY - 8}px`;
+        activePopover.style.left = `${rect.right + scrollX + spacing}px`;
+
+        requestAnimationFrame(trackPosition);
+    }
+
+    requestAnimationFrame(trackPosition);
 }
+
+document.addEventListener("click", (e) => {
+    const existing = document.querySelector(".eco-popover");
+    if (
+        existing &&
+        !existing.contains(e.target) &&
+        !e.target.classList.contains("eco-info-trigger")
+    ) {
+        existing.remove();
+    }
+});
 
 function removeExistingPopover() {
-    const existing = document.querySelector(".eco-popover");
-    if (existing) existing.remove();
-    if (floatingWidget) floatingWidget.style.display = "block";
+    const pop = document.querySelector(".eco-popover");
+    if (pop) pop.remove();
+    activePopover = null;
+    popoverAnchor = null;
 }
-
 
 function getMetaphor(gramsCO2) {
-
-    function pick(options) {
-        return options[Math.floor(Math.random() * options.length)];
-    }
-
-    const contextualLine = pick([
-        "That might not sound like much, but digital activities add up fast.",
-        "Even small emissions can scale dramatically with millions of users.",
-        "These small footprints can accumulate into significant climate impacts."
-    ]);
-
-    const climateLine = pick([
-        "CO₂ traps heat in the atmosphere, accelerating climate change.",
-        "Every gram of CO₂ contributes to global warming.",
-        "Reducing emissions — even small ones — helps curb temperature rise."
-    ]);
-
     if (gramsCO2 <= 0.02) {
-        return pick([{
+        return {
             icon: "📩",
-            text: "≈ Sending an email",
+            text: "≈ 📩 Sending a short email",
             source: "Berners-Lee (2010)",
-            details: `A short plain-text email emits ~0.02g CO₂. ${contextualLine}`,
+            details: "A short plain-text email emits ~0.02g CO₂. Most of this is due to the energy used by servers and networking infrastructure.",
             moreInfo: "https://archive.org/details/howbadarebananas0000bern",
-            whyItMatters: climateLine
-        }]);
+        };
     }
-
-    if (gramsCO2 <= 0.1) {
-        return pick([{
+    if (gramsCO2 <= 0.25) {
+        return {
             icon: "🔍",
-            text: "≈ 5 Google searches",
+            text: "≈ 🔍 One Google search",
             source: "Google (2009)",
-            details: `Each search emits ~0.02g CO₂. ${contextualLine}`,
+            details: "One typical Google search uses about 0.0003 kWh of energy (~0.2g CO₂), from data center processing and delivery.",
             moreInfo: "https://googleblog.blogspot.com/2009/01/powering-google-search.html",
-            whyItMatters: climateLine
-        }]);
+        };
     }
-
-    if (gramsCO2 <= 0.3) {
-        return pick([{
-            icon: "🛍️",
-            text: "≈ Making a plastic bag",
-            source: "EPA (2020)",
-            details: `Manufacturing a small plastic item like a bag or carton emits ~0.3g CO₂. ${contextualLine}`,
-            moreInfo: "https://www.epa.gov/facts-and-figures-about-materials-waste-and-recycling/plastics-material-specific-data",
-            whyItMatters: climateLine
-        }]);
+    if (gramsCO2 <= 0.5) {
+        return {
+            icon: "🔋",
+            text: "≈ 🔋 Charging a phone for 5 mins",
+            source: "UK DEFRA (2018)",
+            details: "Charging a smartphone for 5 minutes uses ~0.5 Wh, emitting ~0.25g CO₂ based on UK grid intensity.",
+            moreInfo: "https://assets.publishing.service.gov.uk/government/uploads/system/uploads/attachment_data/file/854660/Conversion-Factors-2019-Methodology-Paper.pdf",
+        };
     }
-
-    if (gramsCO2 <= 0.6) {
-        return pick([{
-            icon: "🚿",
-            text: "≈ 5 min of hot shower water",
-            source: "Carbon Footprint Ltd",
-            details: `Heating 15 liters for a short shower uses ~0.6g CO₂. ${contextualLine}`,
-            moreInfo: "https://www.carbonfootprint.com/energyconsumption.html",
-            whyItMatters: climateLine
-        }]);
-    }
-
-    if (gramsCO2 <= 1.5) {
-        return pick([{
-            icon: "🧴",
-            text: "≈ Making 1 plastic bottle cap",
-            source: "PlasticsEurope",
-            details: `A small HDPE bottle cap emits ~1.5g CO₂. ${contextualLine}`,
-            moreInfo: "https://plasticseurope.org/knowledge-hub/life-cycle-assessment/",
-            whyItMatters: climateLine
-        }]);
-    }
-
-    if (gramsCO2 <= 3.0) {
-        return pick([{
-            icon: "♻️",
-            text: "≈ Throwing away a PET bottle",
-            source: "Zero Waste Europe",
-            details: `A 500ml PET bottle emits ~3g CO₂. ${contextualLine}`,
-            moreInfo: "https://zerowasteeurope.eu/2020/07/the-carbon-footprint-of-plastics/",
-            whyItMatters: climateLine
-        }]);
-    }
-
-    if (gramsCO2 <= 6.0) {
-        return pick([{
-            icon: "💡",
-            text: "≈ 1 hr of LED lighting",
-            source: "Carbon Trust",
-            details: `A 10W LED bulb emits ~6g CO₂/hour. ${contextualLine}`,
-            moreInfo: "https://www.carbontrust.com/resources/carbon-footprinting-guide",
-            whyItMatters: climateLine
-        }]);
-    }
-
-    if (gramsCO2 <= 10.0) {
-        return pick([{
-            icon: "🚰",
-            text: "≈ 5 min of heated tap water",
-            source: "UK Government Data (BEIS)",
-            details: `Heating water for 5 mins emits ~10g CO₂. ${contextualLine}`,
-            moreInfo: "https://www.gov.uk/government/statistics/energy-consumption-in-the-uk",
-            whyItMatters: climateLine
-        }]);
-    }
-
-    if (gramsCO2 <= 15.0) {
-        return pick([{
-                icon: "🧊",
-                text: "≈ Running a fridge for 12 hrs",
-                source: "IEA (2020)",
-                details: "A modern fridge uses ~30W. Over 12 hours, that adds up to ~12g CO₂ in the EU.",
-                moreInfo: "https://www.iea.org/reports/tracking-buildings-2020",
-                whyItMatters: climateLine
-            },
-            {
-                icon: "🗓️",
-                text: "Doing this daily ≈ 10kg CO₂/year",
-                source: "ScienceDirect (2019)",
-                details: "Even modest daily digital actions can surpass the annual footprint of a low-energy laptop.",
-                moreInfo: "https://www.sciencedirect.com/science/article/pii/S1364032119302794",
-                whyItMatters: climateLine
-            }
-        ]);
-    }
-
-    if (gramsCO2 <= 25.0) {
-        function pick(arr) {
-            return arr[Math.floor(Math.random() * arr.length)];
-        }
-        return pick([{
-                icon: "🔁",
-                text: "≈ 125 Google searches",
-                source: "Google (2009)",
-                details: `~0.2g per search × 125 = 25g CO₂. ${contextualLine}`,
-                moreInfo: "https://googleblog.blogspot.com/2009/01/powering-google-search.html",
-                whyItMatters: climateLine
-            },
-            {
-                icon: "📉",
-                text: "≈ 0.2% of your yearly CO₂ budget",
-                source: "Nature Climate Change (2018)",
-                details: `To meet the 1.5°C goal, each person is ‘allowed’ ~2 tons/year. A ${gramsCO2.toFixed(1)}g action eats into that fast.`,
-                moreInfo: "https://www.nature.com/articles/s41558-018-0091-3",
-                whyItMatters: climateLine
-            }
-        ]);
-    }
-
-    if (gramsCO2 <= 40.0) {
-        return pick([{
-            icon: "🧺",
-            text: "≈ 1 laundry cycle",
-            source: "IEA (2022)",
-            details: `One cycle emits ~35g CO₂ on average. ${contextualLine}`,
+    if (gramsCO2 <= 1.0) {
+        return {
+            icon: "🧊",
+            text: "≈ 🧊 Running a fridge for 1 hour",
+            source: "IEA (2020)",
+            details: "An energy-efficient (A++) fridge runs at ~30W. Over 1 hour, this produces ~1g CO₂ at EU average intensity.",
             moreInfo: "https://www.iea.org/reports/tracking-buildings-2020",
-            whyItMatters: climateLine
-        }]);
+        };
     }
-
-    if (gramsCO2 <= 60.0) {
-        return pick([{
-                icon: "📦",
-                text: "≈ Shipping an online order",
-                source: "Carbon Trust",
-                details: `Small parcel delivery can emit ~60g CO₂. ${contextualLine}`,
-                moreInfo: "https://www.carbontrust.com/news-and-events/insights/the-carbon-footprint-of-delivery",
-                whyItMatters: climateLine
-            },
-            {
-                icon: "🌍",
-                text: "≈ If 1M people did this daily, it would add 20,000 cars on the road",
-                source: "Our World in Data",
-                details: "If 1M people did this daily, it would equal to 20,000 cars on the road. Small actions feel negligible — but scaled globally, they compete with transport emissions.",
-                moreInfo: "https://ourworldindata.org/co2-emissions-from-transport",
-                whyItMatters: climateLine
-            }
-        ]);
+    if (gramsCO2 <= 2.5) {
+        return {
+            icon: "🫖",
+            text: "≈ 🫖 Making a cup of tea",
+            source: "UK Gov Energy Survey",
+            details: "Boiling ~250ml of water in a kettle (~0.05 kWh) emits ~2–3g CO₂ depending on grid mix.",
+            moreInfo: "https://www.gov.uk/government/statistics/energy-consumption-in-the-uk",
+        };
     }
-
-    return pick([{
-        icon: "⚠️",
-        text: "≈ 200 Google searches",
-        source: "Luccioni et al. (2023)",
-        details: `Heavy AI tasks (image generation, large LLMs) can emit over 100g CO₂ per call. ${contextualLine}`,
-        moreInfo: "https://arxiv.org/abs/2104.10350",
-        whyItMatters: climateLine
-    }]);
-}
-
-
-function ensureEcoOrbStyles() {
-    if (document.getElementById("eco-orb-styles")) return;
-    const style = document.createElement("style");
-    style.id = "eco-orb-styles";
-    style.textContent = `
-    #eco-orb * {
-      pointer-events: none;
+    if (gramsCO2 <= 5.0) {
+        return {
+            icon: "💡",
+            text: "≈ 💡 LED bulb for 1 hour",
+            source: "Carbon Trust",
+            details: "A 10W LED bulb used for one hour uses 0.01 kWh, which results in ~5g CO₂ in most countries.",
+            moreInfo: "https://www.carbontrust.com/resources/carbon-footprinting-guide",
+        };
     }
-
-    #eco-orb {
-      cursor: pointer;
+    if (gramsCO2 <= 10.0) {
+        return {
+            icon: "🚗",
+            text: "≈ 🚗 Driving 100 meters",
+            source: "EEA (2023)",
+            details: "An average EU petrol car emits ~120g CO₂/km. That's ~12g for just 100 meters of driving.",
+            moreInfo: "https://www.eea.europa.eu/en/topics/in-depth/transport-and-environment",
+        };
     }
-  `;
-    document.head.appendChild(style);
+    if (gramsCO2 <= 20.0) {
+        return {
+            icon: "📦",
+            text: "≈ 📦 Sending a letter by post",
+            source: "Royal Mail",
+            details: "A first-class letter delivery by post emits ~20g CO₂ including transport and sorting stages.",
+            moreInfo: "https://www.royalmailgroup.com/en/sustainability/",
+        };
+    }
+    if (gramsCO2 <= 50.0) {
+        return {
+            icon: "🧠",
+            text: "≈ 🧠 Training a small ML model",
+            source: "Luccioni et al. (2023)",
+            details: "Training a small neural net locally on a laptop or single GPU may emit between 30–50g CO₂ depending on hardware and time.",
+            moreInfo: "https://arxiv.org/abs/2104.10350",
+        };
+    }
+    return {
+        icon: "⚠",
+        text: "≈ ⚠ High-impact AI task",
+        source: "Henderson et al. (2020)",
+        details: "Tasks like large model inference or image generation can exceed 100g CO₂ per use depending on model size and infrastructure.",
+        moreInfo: "https://arxiv.org/abs/2004.08900",
+    };
 }
