@@ -12,9 +12,9 @@ Developed as part of a research project on **sustainable interaction design**, t
 
 ### 1. Download and Install
 
-1. [Download the ZIP file](#) from this GitHub repository and **unzip** it to your desktop or another easy-to-find location.
+1. Download the ZIP file from this GitHub repository and **unzip** it to your desktop or another easy-to-find location.
    
-   <img width="414" height="373" alt="Screenshot 2025-08-07 at 13 23 25" src="https://github.com/user-attachments/assets/14a05034-ae47-4932-b970-14b56f6d2812" />
+   <img width="456" height="351" alt="DownloadZIP" src="https://github.com/user-attachments/assets/c49f5d5b-191a-4bcb-b3d4-61b367135c27" />
 
 3. Open **Google Chrome** and go to:  
    `chrome://extensions/`
